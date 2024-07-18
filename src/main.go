@@ -88,6 +88,7 @@ type Game struct {
 	board      *Board
 	isPressed  bool
 	gameOver   bool
+	score      int
 }
 
 func (g *Game) addRandomTile() {
@@ -116,19 +117,21 @@ func (b *Board) isBoardFull() bool {
 	return true
 }
 
-func (b *Board) checkCollisons(first, second *Tile) bool {
+func (g *Game) checkCollisons(first, second *Tile) bool {
 	//value := first.value
 	log.Printf("check %v, %v", first, second)
 
 	if second.value == 0 {
 		second.value = first.value
 		first.value = 0
-		b.foundCollision = true
+		g.board.foundCollision = true
+		g.score += second.value
 		return true
 	} else if first.value > 0 && first.value == second.value {
 		second.value = second.value + first.value
 		first.value = 0
-		b.foundCollision = true
+		g.board.foundCollision = true
+		g.score += second.value
 		return true
 	}
 	return false
@@ -136,6 +139,10 @@ func (b *Board) checkCollisons(first, second *Tile) bool {
 
 func (g *Game) Update() error {
 	if g.gameOver {
+		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
+			g.NewGame()
+
+		}
 		return nil
 	}
 	if inpututil.IsKeyJustPressed(ebiten.KeyRight) {
@@ -151,7 +158,7 @@ func (g *Game) Update() error {
 					if y == i {
 						continue
 					}
-					moved := g.board.checkCollisons(&g.board.grid[x][y], &g.board.grid[x][i])
+					moved := g.checkCollisons(&g.board.grid[x][y], &g.board.grid[x][i])
 					if moved {
 						log.Printf("moved to [%v, %v]", x, i)
 						break
@@ -173,7 +180,7 @@ func (g *Game) Update() error {
 					if y == i {
 						continue
 					}
-					moved := g.board.checkCollisons(&g.board.grid[x][y], &g.board.grid[x][i])
+					moved := g.checkCollisons(&g.board.grid[x][y], &g.board.grid[x][i])
 					if moved {
 						break
 					}
@@ -199,7 +206,7 @@ func (g *Game) Update() error {
 					if x == i {
 						continue
 					}
-					moved := g.board.checkCollisons(&g.board.grid[x][y], &g.board.grid[i][y])
+					moved := g.checkCollisons(&g.board.grid[x][y], &g.board.grid[i][y])
 					if moved {
 						log.Printf("moved to [%v, %v]", i, y)
 						break
@@ -223,7 +230,7 @@ func (g *Game) Update() error {
 					if x == i {
 						continue
 					}
-					moved := g.board.checkCollisons(&g.board.grid[x][y], &g.board.grid[i][y])
+					moved := g.checkCollisons(&g.board.grid[x][y], &g.board.grid[i][y])
 					if moved {
 						log.Printf("moved to [%v, %v]", i, y)
 						break
@@ -316,11 +323,21 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		//		size := g.board.size*tileSize + (g.board.size+1)*tileMargin
 		g.boardImage = ebiten.NewImage(340, 340)
 	}
+	screen.Fill(backgroundColor)
 	if g.gameOver {
 		// todo: implement game over screen
+		options := PanelOptions{
+			height:    50,
+			width:     420,
+			x:         0,
+			y:         600 - 50,
+			lineThick: 10,
+			text:      "Game Over! Press enter to restart.",
+		}
+		createPanel(screen, options)
 		return
 	}
-	screen.Fill(backgroundColor)
+
 	g.board.Draw(g.boardImage)
 	op := &ebiten.DrawImageOptions{}
 	sw, sh := screen.Bounds().Dx(), screen.Bounds().Dy()
@@ -332,15 +349,44 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	if g.isPressed {
 		ebitenutil.DebugPrint(screen, "Hello, World!")
 	}
+	options := PanelOptions{
+		height:    50,
+		width:     420,
+		x:         0,
+		y:         600 - 50,
+		lineThick: 10,
+		text:      "Score: " + strconv.Itoa(g.score),
+	}
+	createPanel(screen, options)
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
 	return 420, 600
 }
 
+func (g *Game) NewGame() {
+
+	g.score = 0
+	g.gameOver = false
+	for i := range g.board.grid {
+		for j := range g.board.grid[i] {
+			tile := Tile{
+				x:     i,
+				y:     j,
+				value: 0,
+			}
+			g.board.grid[i][j] = tile
+		}
+	}
+	g.board.grid[0][0].value = 2
+	g.board.grid[1][0].value = 4
+	g.board.grid[1][1].value = 2
+
+}
+
 func main() {
 	ebiten.SetWindowSize(420, 600)
-	ebiten.SetWindowTitle("Hello, World!")
+	ebiten.SetWindowTitle("2048")
 
 	s, err := text.NewGoTextFaceSource(bytes.NewReader(fonts.MPlus1pRegular_ttf))
 	if err != nil {
@@ -356,22 +402,10 @@ func main() {
 	for i := range grid {
 		grid[i] = make([]Tile, 4)
 	}
-	for i := range grid {
-		for j := range grid[i] {
-			tile := Tile{
-				x:     i,
-				y:     j,
-				value: 0,
-			}
-			grid[i][j] = tile
-		}
-	}
-	grid[0][0].value = 2
-	grid[1][0].value = 4
-	grid[1][1].value = 2
-
 	game.board = board
 	board.grid = grid
+
+	game.NewGame()
 
 	if err := ebiten.RunGame(game); err != nil {
 		log.Fatal(err)
